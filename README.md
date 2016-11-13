@@ -7,14 +7,15 @@ This is ZCash mining pool.
 * poolrestapi - standalone module for REST api support
 * ngxrest - nginx module for REST api, fastcgi analogue
 
-###### Install dependencies
+###### Устанавливаем зависимости
 
 sudo apt-get install cmake libssl-dev libsodium-dev libpcre3-dev libleveldb-dev libboost-all-dev libgmp-dev libprotobuf-dev protobuf-compiler libjansson-dev
 
-###### Download sources
+###### Переходим в root. Скачиваем исходники.
 
 ```
-cd YOUR_BUILD_DIRECTORY
+sudo su
+cd
 git clone https://github.com/zcash/zcash
 git clone https://github.com/config4star/config4cpp
 git clone https://github.com/google/flatbuffers
@@ -28,60 +29,61 @@ wget https://nginx.org/download/nginx-1.11.5.tar.gz
 tar -xzf nginx-1.11.5.tar.gz
 ```
 
-###### Build pool sources
-```
-cd YOUR_BUILD_DIRECTORY/config4cpp
-make -j5
+###### Собираем ZCash daemon, если отсутствует.
 
-cd YOUR_BUILD_DIRECTORY/flatbuffers
+Как собрать, тут -> ZCash github page: https://github.com/zcash/zcash/wiki/1.0-User-Guide
+
+###### Собираем необходиое для пула 
+```
+cd /root/config4cpp
+make -j$(nproc)
+
+cd /root/flatbuffers
 mkdir build
 cd build
 cmake ..
-make -j5
+make -j$(nproc)
 sudo make install
 
-cd YOUR_BUILD_DIRECTORY/libp2p
+cd /root/libp2p
 mkdir x86_64-Linux
 cd x86_64-Linux
 cmake ../src
-make -j5
+make -j$(nproc)
 
-cd YOUR_BUILD_DIRECTORY/poolcore
+cd /root/poolcore
 mkdir x86_64-Linux
 cd x86_64-Linux
-cmake ../src -DROOT_SOURCE_DIR=YOUR_BUILD_DIRECTORY -DZCASH_ENABLED=1
-make -j5
+cmake ../src -DROOT_SOURCE_DIR=/root -DZCASH_ENABLED=1
+make -j$(nproc)
 
-cd YOUR_BUILD_DIRECTORY/pool_frontend_zcash
+cd /root/pool_frontend_zcash
 mkdir x86_64-Linux
 cd x86_64-Linux
-cmake ../src -DROOT_SOURCE_DIR=YOUR_BUILD_DIRECTORY
-make -j5
+cmake ../src -DROOT_SOURCE_DIR=/root
+make -j$(nproc)
 
-cd YOUR_BUILD_DIRECTORY/poolrestapi
+cd /root/poolrestapi
 mkdir x86_64-Linux
 cd x86_64-Linux
-cmake ../src -DROOT_SOURCE_DIR=YOUR_BUILD_DIRECTORY
-make -j5
+cmake ../src -DROOT_SOURCE_DIR=/root
+make -j$(nproc)
 
-cd YOUR_BUILD_DIRECTORY/nginx-1.11.5
-./configure --prefix=NGINX_INSTALL_DIRECTORY --add-module=YOUR_BUILD_DIRECTORY/ngxrest
-make -j5
+cd /root/nginx-1.11.5
+./configure --prefix=NGINX_INSTALL_DIRECTORY --add-module=/root/ngxrest
+make -j$(nproc)
 make install
 ```
 
-###### Setup ZCash daemon
-
-You can find setup instructions on ZCash github page: https://github.com/zcash/zcash/wiki/1.0-User-Guide
-
-After building by command ./zcutil/build.sh you must apply pool integration patch:
+###### Патчим ZCash daemon
 
 ```
-patch -p0 < pool.diff
+cd /root/zcash
+patch -p0 < /pool_frontend_zcash/pool.diff
 ```
 
 
-Add path to pool libraries in Makefile:
+Меняем строку в /root/zcash/src/Makefile:
 
 ```
 --- src/Makefile        2016-11-08 13:36:41.033699973 +0300
@@ -91,20 +93,20 @@ Add path to pool libraries in Makefile:
  LIBTOOL = $(SHELL) $(top_builddir)/libtool
  LIBTOOL_APP_LDFLAGS = 
 -LIBZCASH_LIBS = -lsnark -lgmp -lgmpxx -lboost_system-mt -lcrypto -lsodium -fopenmp
-+LIBZCASH_LIBS = -lsnark -lgmp -lgmpxx -lboost_system-mt -lcrypto -lsodium -fopenmp -LYOUR_BUILD_DIRECTORY/poolcore/x86_64-Linux/zcash -lpoolrpczcash -LYOUR_BUILD_DIRECTORY/libp2p/x86_64-Linux/p2p -lp2p -LYOUR_BUILD_DIRECTORY/libp2p/x86_64-Linux/asyncio -lasyncio-0.3 -lrt
++LIBZCASH_LIBS = -lsnark -lgmp -lgmpxx -lboost_system-mt -lcrypto -lsodium -fopenmp -L/root/poolcore/x86_64-Linux/zcash -lpoolrpczcash -L/root/libp2p/x86_64-Linux/p2p -lp2p -L/root/libp2p/x86_64-Linux/asyncio -lasyncio-0.3 -lrt
  LIPO = 
  LN_S = ln -s
  LRELEASE = 
 ```
 
-Build ZCash daemon again:
+Пересобираем пропатченого zcashd:
 ``` 
-make -j5
+make -j$(nproc)
 ```
 
-Launch command is src/zcashd -p2pport=12201. Port 12201 is used by internal pool protocol. Also, you can use poolrpccmd utility for interact with daemon by command line.
+Запускаем src/zcashd -p2pport=12201. Port 12201 is used by internal pool protocol. Also, you can use poolrpccmd utility for interact with daemon by command line.
 
-###### Setup pool configuration file
+###### Настройка конфига пула
 ```
 pool_frontend_zcash {
   isMaster = "true";
@@ -157,7 +159,7 @@ pool_frontend_zcash {
 * pool_zaddr - only for ZCash, pool Z-Address for receive coinbase funds. Must be created by zcash-cli z_getnewaddress
 * pool_taddr - only for ZCash, address used for make payouts. Must be created by zcash-cli getnewaddress
 
-###### Setup poolrestapi module
+###### Настройка модуля poolrestapi
 ```
 poolrestapi {
   listenAddress = "cxxrestapi://127.0.0.1:19999";
@@ -181,7 +183,7 @@ zcash {
 * frontends - pool frontend addresses, must be taken from 'localAddress' of pool frontend configuration file
 * poolAppName - must be taken from 'poolAppName' of pool frontend configuration file
 
-###### Setup nginx
+###### Настройка nginx
 
 This is fragment of nginx.conf file:
 ```
@@ -218,16 +220,16 @@ This is fragment of nginx.conf file:
   
 Full nginx configuration file example you can find in poolrestapi repository
 
-###### Launch ZCash daemon
+###### Запуск ZCash daemon
 ```
 src/zcashd -p2pport=12201
 ```
 
-After launching you can test it with poolrpccmd utility (from poolcore repository)
+После запуска можно протестировать через poolrpccmd utility (находится в папке poolcore)
 
 ```
-cd YOUR_BUILD_DIRECTORY/poolcore/x8664-Linux
-poolrpccmd/poolrpccmd p2p://127.0.0.1:12201 getInfo
+cd /root/poolcore/x86_64-Linux/poolrpccmd
+./poolrpccmd p2p://127.0.0.1:12201 getInfo
 ```
 
 ```
@@ -235,7 +237,7 @@ poolrpccmd/poolrpccmd p2p://127.0.0.1:12201 getInfo
 ```
 
 ```
-poolrpccmd/poolrpccmd p2p://127.0.0.1:12201 getBlockTemplate
+./poolrpccmd p2p://127.0.0.1:12201 getBlockTemplate
 ```
 
 ```
@@ -249,19 +251,19 @@ getBlockTemplate call duration 0.307ms
  * equilHashK = 9
  * equilHashN = 200
 ```
-###### Launch pool
+###### Запуск пула
 
 ```
-cd YOUR_BUILD_DIRECTORY/pool_frontend_zcash/x86_64-Linux
+cd /root/pool_frontend_zcash/x86_64-Linux
 ./pool_frontend_zcash ~/.poolcfg/zcash.cfg
 ```
 
 ~/.poolcfg/zcash.cfg - pool configuration file (see p. 4)
 
-###### Launch poolrestapi and nginx
+###### Запуск poolrestapi and nginx
 
 ```
-cd YOUR_BUILD_DIRECTORY/poolrestapi/x86_64-Linux
+cd /root/poolrestapi/x86_64-Linux
 ./poolrestapi ~/.poolcfg/poolrestapi.cfg
 ```
 
@@ -270,5 +272,5 @@ cd YOUR_BUILD_DIRECTORY/poolrestapi/x86_64-Linux
 ```
 cd YOUR_BUILD_DIRECTORY/pooljs/coins-for-all/webapp
 cp -r * NGINX_INSTALL_DIRECTORY/html
-sudo NGINX_INSTALL_DIRECTORY/sbin/nginx (you need sudo because port 80 is used)
+NGINX_INSTALL_DIRECTORY/sbin/nginx
 ```
